@@ -1,0 +1,51 @@
+on: [push]
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@master
+    
+    - uses: azure/docker-login@v1
+      with:
+        login-server: baseimagerepoaks.azurecr.io
+        username: ${{ secrets.acr_baseimagerepoaks_username }}
+        password: ${{ secrets.acr_baseimagerepoaks_password }}
+    
+    - name: Build and push image to ACR
+      id: build-image
+      run: |
+        docker build "$GITHUB_WORKSPACE/app" -f  "app/Dockerfile" -t baseimagerepoaks.azurecr.io/teskkluster:${{ github.sha }}
+        docker push baseimagerepoaks.azurecr.io/teskkluster:${{ github.sha }}
+    
+    - uses: azure/k8s-set-context@v1
+      with:
+         kubeconfig: ${{ secrets.aks_teskkluster_kubeConfig }}
+      id: login
+    
+    - name: Create namespace
+      run: |
+        namespacePresent=`kubectl get namespace | grep teskkluster20e5 | wc -l`
+        if [ $namespacePresent -eq 0 ]
+        then
+            echo `kubectl create namespace teskkluster20e5`
+        fi
+
+    - uses: azure/k8s-create-secret@v1
+      with:
+        namespace: teskkluster20e5
+        container-registry-url: baseimagerepoaks.azurecr.io
+        container-registry-username: ${{ secrets.acr_baseimagerepoaks_username }}
+        container-registry-password: ${{ secrets.acr_baseimagerepoaks_password }}
+        secret-name: teskklusterdockerauth
+       
+    - uses: azure/k8s-deploy@v1
+      with:
+        namespace: teskkluster20e5
+        manifests: |
+          manifests/deployment.yml
+          manifests/service.yml
+          manifests/ingress.yml
+        images: |
+          baseimagerepoaks.azurecr.io/teskkluster:${{ github.sha }}
+        imagepullsecrets: |
+          teskklusterdockerauth
