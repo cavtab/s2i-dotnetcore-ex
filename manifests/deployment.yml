@@ -1,0 +1,16 @@
+apiVersion : apps/v1beta1
+kind: Deployment
+metadata:
+  name: "teskkluster"
+spec:
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app: "teskkluster"
+    spec:
+      containers:
+        - name: "teskkluster"
+          image: "baseimagerepoaks.azurecr.io/teskkluster"
+          ports:
+          - containerPort: 8080
